@@ -1,6 +1,6 @@
 # inSTRbility
 
-Contributers: Harriet Dashnow, Michael Goldberg
+Contributers: Harriet Dashnow, Michael Goldberg, Brent Pedersen
 
 inSTRbility: STR instability
 
