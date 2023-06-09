@@ -19,8 +19,6 @@ def parse_args():
     # subcommands
     parser.add_argument('BAM', type=str,
                         help='bam or cram file')
-    #parser.add_argument('--fasta', type=str,
-    #                    help='reference genome fasta (required for cram)')
     parser.add_argument('--out', type=str, default = '',
                         help='output file of reads segments in fasta format')
 
@@ -79,6 +77,15 @@ def extract_read_chunks(samfilename, outfilename = ''):
         # start is the position in the read corresponding to the start of the locus in the reference
         start = translate(read, locus[1], True)
         end = translate(read, locus[2], False)
+
+        # Skip reads that end within the locus
+        if start == None or end == None:
+            continue
+        # Include the portions of reads that end within the locus
+#        if start == None:
+#            start = 0
+#        if end == None:
+#            end = read.query_length # Need to +1?
 
         # extract sequence of read between those coordinates
         read_chunk = read.query_sequence[start:end]

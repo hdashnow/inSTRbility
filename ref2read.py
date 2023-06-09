@@ -23,9 +23,6 @@ def consumes_reference(cigartuple):
     """If cigar operation consumes reference return True, else return False"""
     return cigartuple[0] in [MATCH, DEL, SKIP, EQUAL, DIFF]
 
-def by_supp(a):
-    return a[2]["supp"]
-
 def translate(aln, pos, start = True):
         """translate a genomic reference coordinate to a read (aln) coordinate.
         if start is True, return leftmost, otherwise return rightmost"""
@@ -44,22 +41,24 @@ def translate(aln, pos, start = True):
                 dict(start=aln_off, stop=aln_off + op_len *
                     int(cons_q))))
 
-#            I.add((aln_off, aln_off + op_len * int(cons_q),
-#                dict(chrom=ref_name, start=ref_off, stop=ref_off + op_len *
-#                    int(cons_r))))
-
             aln_off += int(cons_q) * op_len
             ref_off += int(cons_r) * op_len
         
         results = [(start, stop, read_dict) for (start, stop, read_dict) in I.find((pos, pos))]
 
         results.sort()
+
+        # No match. This may indicate a non-spanning read
+        if len(results) == 0:
+            return None
+
         all_pos = []
+
         for start, stop, read_dict in results:
             over = pos - start # how far past start
-            #assert stop >= pos
+            assert read_dict["start"] + over > 0
             all_pos.append(read_dict["start"] + over)
-        #pdb.set_trace()
+
         if start:
             return all_pos[0]
         else:
