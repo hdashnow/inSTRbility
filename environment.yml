@@ -1,0 +1,8 @@
+name: instability
+channels:
+- bioconda
+dependencies:
+- python=3*
+- pytest #only requred for testing
+- pysam
+- interlap
