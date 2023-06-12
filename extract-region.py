@@ -1,16 +1,11 @@
-# Parse TRF ngs dat file into tab delimited file
-# Assumes TRF was run on aligned contigs.
-# Each @ is a contig labeled with it's mapping position,
-# each line is an STR
-
 import pdb
 import argparse
 import os
 import sys
-from ref2read import translate
 import itertools
 import pysam
 import statistics as stats
+from ref2read import translate
 
 def parse_args():
     # top-level parser
