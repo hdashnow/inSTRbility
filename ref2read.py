@@ -56,8 +56,13 @@ def translate(aln, pos, start = True):
 
         for start, stop, read_dict in results:
             over = pos - start # how far past start
-            assert read_dict["start"] + over > 0
-            all_pos.append(read_dict["start"] + over)
+            # print(f"start: {start}")
+            # print(f"stop: {stop}")
+            # print(f"over: {over}")
+            # print(f"read_dict: {read_dict}")
+            if read_dict["start"] + over > 0: # Not sure if this is correct
+                all_pos.append(read_dict["start"] + over)
+
 
         if start:
             return all_pos[0]
