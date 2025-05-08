@@ -145,6 +145,8 @@ def extract_reads(bed_file, bam_files, ref_fasta, aln_format):
 
             reference_repseq = ""
             for bam in bams:
+                # Get the file name
+                bam_id = bam.filename.decode('utf-8').split('.')[0]
                 read_data = []
                 if chrom not in bam.references: continue
                 reads = bam.fetch(chrom, repeat_start, repeat_end)
@@ -197,11 +199,11 @@ def extract_reads(bed_file, bam_files, ref_fasta, aln_format):
                         med_meth = None
                     allele_len = (end_idx - start_idx)/motif_len
 
-                    read_data.append([f"{chrom}:{repeat_start}-{repeat_end}", read.query_name, start_idx, end_idx, allele_len, med_meth])
+                    read_data.append([bam_id, f"{chrom}:{repeat_start}-{repeat_end}", read.query_name, start_idx, end_idx, allele_len, med_meth])
 
                 read_data = sorted(read_data, key=lambda x: x[2])
                 # Print header
-                print(f"#locus\tread_name\tread_repeat_start\tread_repeat_end\tallele_length\tmedian_meth")
+                print(f"#sample\tlocus\tread_name\tread_repeat_start\tread_repeat_end\tallele_length\tmedian_meth")
                 for data in read_data:
                     # qualities = ':'.join([str(x) for x in data[-1]])
                     # print(*data[:-1], qualities, sep='\t')
