@@ -1,6 +1,7 @@
 import pysam
 import argparse
 from Bio.Align import PairwiseAligner
+import statistics as stats
 
 """
 NOTE: Though samtools uses a position with a 1 based coordinate system. read.reference_start returns the position w.r.t 
@@ -138,7 +139,7 @@ def extract_reads(bed_file, bam_files, ref_fasta, aln_format):
             chrom = line[0]
             repeat_start = int(line[1]); repeat_end = int(line[2])
             cigar = line[-1]
-            motif_len = int(line[4])
+            motif_len = len(line[3])
 
             if chrom != 'chrX': continue
 
@@ -153,7 +154,7 @@ def extract_reads(bed_file, bam_files, ref_fasta, aln_format):
                         start_idx, end_idx = parse_cigar(read.cigartuples, read.reference_start, repeat_start, repeat_end)
                         # RD2RP_CIGAR, RF2RD2RP_CIGAR, tags = convert_CIGAR(cigar, sub_cigar, motif, motif_len, read_repseq)
 
-                        read_data.append([chrom, repeat_start, repeat_end, read.query_name, read.reference_start, read.reference_end, start_idx, end_idx])
+                        #read_data.append([f"{chrom}:{repeat_start}-{repeat_end}", read.query_name, start_idx, end_idx])
 
                     else:
                         if read.cigartuples[0][0] == 4:
@@ -177,9 +178,30 @@ def extract_reads(bed_file, bam_files, ref_fasta, aln_format):
                             if best_position != -1:
                                 start_idx, end_idx = parse_cigar([(4, best_position), (0, 50), (1,sclip_len-best_position-50)] + read.cigartuples[1:],
                                                                 read.reference_start, repeat_start, repeat_end)
-                                read_data.append([chrom, repeat_start, repeat_end, read.query_name, read.reference_start, read.reference_end, start_idx, end_idx])
+                                #read_data.append([chrom, repeat_start, repeat_end, read.query_name, read.reference_start, read.reference_end, start_idx, end_idx])
+
+                    # Get methylation
+                    chunk_meth = []
+                    mods = read.modified_bases_forward
+                    for modtype in mods:
+                        if modtype[0] == 'C' and modtype[2] == 'm':
+                            for pos, qual in mods[modtype]:
+                                if pos >= start_idx and pos < end_idx: # Need to check the position logic here
+                                    prob = qual/256
+                                    if qual > 0:
+                                        chunk_meth.append(prob)
+                    # median meth
+                    if len(chunk_meth) > 0:
+                        med_meth = stats.median(chunk_meth)
+                    else:
+                        med_meth = None
+                    allele_len = (end_idx - start_idx)/motif_len
+
+                    read_data.append([f"{chrom}:{repeat_start}-{repeat_end}", read.query_name, start_idx, end_idx, allele_len, med_meth])
 
                 read_data = sorted(read_data, key=lambda x: x[2])
+                # Print header
+                print(f"#locus\tread_name\tread_repeat_start\tread_repeat_end\tallele_length\tmedian_meth")
                 for data in read_data:
                     # qualities = ':'.join([str(x) for x in data[-1]])
                     # print(*data[:-1], qualities, sep='\t')
