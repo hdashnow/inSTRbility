@@ -209,7 +209,7 @@ def extract_reads(bed_file, bam_files, ref_fasta, aln_format):
                 for data in read_data:
                     print(*data, data[-1]-data[-2], sep='\t')
 
-    for bam in bams: bam.close()
+                bam.close()
     fasta.close()
 
 
