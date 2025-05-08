@@ -21,7 +21,7 @@ def parse_args():
     return args
 
 
-def parse_cigar(cigar_tuples, read_start, repeat_start, repeat_end, ref_sequence, query_sequence):
+def parse_cigar(cigar_tuples, read_start, repeat_start, repeat_end):
     """
     Parses read alignment CIGAR and returns coordinates of the repeat within the read and the CIGAR
     corresponding to the repeat sequence.
@@ -85,7 +85,7 @@ def parse_cigar(cigar_tuples, read_start, repeat_start, repeat_end, ref_sequence
             # move the query position
             qpos += insert_length
 
-        elif cigar[0] == 0: # match (both equals & difference)
+        elif cigar[0] == 0 or cigar[0] == 7: # match (both equals & difference)
             match_len = cigar[1]
 
             for i in range(match_len):
@@ -100,12 +100,7 @@ def parse_cigar(cigar_tuples, read_start, repeat_start, repeat_end, ref_sequence
 
                 if start_idx != False and end_idx == False:
                     # if match within the repeat
-                    if query_sequence[qpos+i] == ref_sequence[rpos+i-read_start]:
-                        # if the bases match
-                        sub_cigar += 'M'
-                    else:
-                        # if its a mismatch
-                        sub_cigar += 'X'
+                    sub_cigar += 'M'
             # move both reference and query positions
             rpos += match_len; qpos += match_len
 
@@ -115,13 +110,13 @@ def parse_cigar(cigar_tuples, read_start, repeat_start, repeat_end, ref_sequence
                 # but the read has moved beyond the repeat
                 end_idx = qpos - (rpos - repeat_end)
             # if position moved beyond repeat
-            return [start_idx, end_idx, sub_cigar]
+            return [start_idx, end_idx]
 
     if end_idx == False:
                 # if the end of the repeat is not covered by the read
                 # but the read has moved beyond the repeat
                 end_idx = qpos - (rpos - repeat_end)
-    return [start_idx, end_idx, sub_cigar]
+    return [start_idx, end_idx]
 
 
 def extract_reads(bed_file, bam_files, ref_fasta, aln_format):
@@ -155,24 +150,10 @@ def extract_reads(bed_file, bam_files, ref_fasta, aln_format):
                 check = False
                 for read in reads:
                     if read.reference_start < repeat_start-10 and read.reference_end > repeat_end + 10:
-                        print("Aligned in repeat:", read.reference_start, read.reference_end, read.cigarstring, sep='\t')
-                        print(read.query_sequence, sep='\t')
-                        if not read.has_tag('MD'): continue
-                        if not check:
-                            reference_repseq = read.get_reference_sequence()[(repeat_start - read.reference_start): (repeat_start - read.reference_start) + repeat_end-repeat_start]
-                            # print(chrom, repeat_start, repeat_end, reference_repseq, cigar, sep='\t')
-                            print(*line, sep='\t')
-                            check = True
-                        
-                        print(read.has_tag('MD'))
-                        start_idx, end_idx, sub_cigar = parse_cigar(read.cigartuples, read.reference_start, repeat_start, repeat_end,
-                                                                    read.get_reference_sequence(), read.query_sequence)
-                        
-                        read_repseq = read.query_sequence[start_idx: end_idx]
-                        motif = reference_repseq[:motif_len]
+                        start_idx, end_idx = parse_cigar(read.cigartuples, read.reference_start, repeat_start, repeat_end)
                         # RD2RP_CIGAR, RF2RD2RP_CIGAR, tags = convert_CIGAR(cigar, sub_cigar, motif, motif_len, read_repseq)
 
-                        read_data.append([chrom, repeat_start, repeat_end, read.query_name, start_idx, end_idx])
+                        read_data.append([chrom, repeat_start, repeat_end, read.query_name, read.reference_start, read.reference_end, start_idx, end_idx])
 
                     else:
                         if read.cigartuples[0][0] == 4:
@@ -180,24 +161,23 @@ def extract_reads(bed_file, bam_files, ref_fasta, aln_format):
                             #                affect the reference position.
                             soft_clipped = read.query_sequence[:read.cigartuples[0][1]]
                             sclip_len = read.cigartuples[0][1]
-                            if read.has_tag('MD'):
-                                # if the read has a MD tag
-                                upstream = fasta.fetch(chrom, repeat_start - 50, repeat_start)
-                                aligner = PairwiseAligner()
-                                aligner.mode = 'local'
-                                best_alingment_score = 0
-                                best_position = 0
-                                best_alignment = None
-                                for i in range(len(soft_clipped)):
-                                    alignment = aligner.align(soft_clipped[i:i+50], upstream)
-                                    if alignment[0].score > best_alingment_score and alignment[0].score > 40:
-                                        best_alingment_score = alignment[0].score
-                                        best_position = i
-                                        best_alignment = alignment[0]
-                                start_idx, end_idx, sub_cigar = parse_cigar([(4, best_position), (0, 50), (1,sclip_len-best_position-50)] + read.cigartuples[1:], read.reference_start, repeat_start, repeat_end,
-                                                                            read.get_reference_sequence(), read.query_sequence)
-                                read_data.append([chrom, repeat_start, repeat_end, read.query_name, start_idx, end_idx])
-                            else: print("No MD tag")
+                            # if the read has a MD tag
+                            upstream = fasta.fetch(chrom, repeat_start - 50, repeat_start)
+                            aligner = PairwiseAligner()
+                            aligner.mode = 'local'
+                            best_alingment_score = 0
+                            best_position = -1
+                            best_alignment = None
+                            for i in range(len(soft_clipped)):
+                                alignment = aligner.align(soft_clipped[i:i+50], upstream)
+                                if alignment[0].score > best_alingment_score and alignment[0].score > 40:
+                                    best_alingment_score = alignment[0].score
+                                    best_position = i
+                                    best_alignment = alignment[0]
+                            if best_position != -1:
+                                start_idx, end_idx = parse_cigar([(4, best_position), (0, 50), (1,sclip_len-best_position-50)] + read.cigartuples[1:],
+                                                                read.reference_start, repeat_start, repeat_end)
+                                read_data.append([chrom, repeat_start, repeat_end, read.query_name, read.reference_start, read.reference_end, start_idx, end_idx])
 
                 read_data = sorted(read_data, key=lambda x: x[2])
                 for data in read_data:
