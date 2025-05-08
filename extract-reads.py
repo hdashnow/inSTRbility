@@ -205,7 +205,7 @@ def extract_reads(bed_file, bam_files, ref_fasta, aln_format):
 
                 read_data = sorted(read_data, key=lambda x: x[2])
                 # Print header
-                print(f"#sample\tlocus\tread_name\tread_repeat_start\tread_repeat_end\tallele_length\tmedian_meth")
+                print(f"sample\tlocus\tread_name\tread_repeat_start\tread_repeat_end\tallele_length\tmedian_meth")
                 for data in read_data:
                     print(*data, data[-1]-data[-2], sep='\t')
 
