@@ -49,6 +49,7 @@ def parse_cigar(cigar_tuples, read_start, repeat_start, repeat_end):
     sub_cigar = ''
 
     for c, cigar in enumerate(cigar_tuples):
+        print(cigar[0], cigar[1], qpos, rpos) 
         if cigar[0] == 4:
            # soft clipped - these bases are part of the read sequence but do not
            #                affect the reference position.
@@ -156,7 +157,7 @@ def extract_reads(bed_file, bam_files, ref_fasta, aln_format):
                         start_idx, end_idx = parse_cigar(read.cigartuples, read.reference_start, repeat_start, repeat_end)
                         # RD2RP_CIGAR, RF2RD2RP_CIGAR, tags = convert_CIGAR(cigar, sub_cigar, motif, motif_len, read_repseq)
 
-                        #read_data.append([f"{chrom}:{repeat_start}-{repeat_end}", read.query_name, start_idx, end_idx])
+                        read_data.append([f"{chrom}:{repeat_start}-{repeat_end}", read.query_name, start_idx, end_idx])
 
                     else:
                         if read.cigartuples[0][0] == 4:
@@ -164,6 +165,7 @@ def extract_reads(bed_file, bam_files, ref_fasta, aln_format):
                             #                affect the reference position.
                             soft_clipped = read.query_sequence[:read.cigartuples[0][1]]
                             sclip_len = read.cigartuples[0][1]
+                            if read.reference_start - sclip_len > repeat_start - 50: continue
                             # if the read has a MD tag
                             upstream = fasta.fetch(chrom, repeat_start - 50, repeat_start)
                             aligner = PairwiseAligner()
@@ -179,7 +181,7 @@ def extract_reads(bed_file, bam_files, ref_fasta, aln_format):
                                     best_alignment = alignment[0]
                             if best_position != -1:
                                 start_idx, end_idx = parse_cigar([(4, best_position), (0, 50), (1,sclip_len-best_position-50)] + read.cigartuples[1:],
-                                                                read.reference_start, repeat_start, repeat_end)
+                                                                repeat_start-50, repeat_start, repeat_end)
                                 #read_data.append([chrom, repeat_start, repeat_end, read.query_name, read.reference_start, read.reference_end, start_idx, end_idx])
 
                     # Get methylation
@@ -205,9 +207,7 @@ def extract_reads(bed_file, bam_files, ref_fasta, aln_format):
                 # Print header
                 print(f"#sample\tlocus\tread_name\tread_repeat_start\tread_repeat_end\tallele_length\tmedian_meth")
                 for data in read_data:
-                    # qualities = ':'.join([str(x) for x in data[-1]])
-                    # print(*data[:-1], qualities, sep='\t')
-                    print(*data, sep='\t')
+                    print(*data, data[-1]-data[-2], sep='\t')
 
     for bam in bams: bam.close()
     fasta.close()
