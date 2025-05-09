@@ -2,6 +2,8 @@ import pysam
 import argparse
 from Bio.Align import PairwiseAligner
 import statistics as stats
+import faulthandler
+faulthandler.enable()
 
 """
 NOTE: Though samtools uses a position with a 1 based coordinate system. read.reference_start returns the position w.r.t 
@@ -49,7 +51,7 @@ def parse_cigar(cigar_tuples, read_start, repeat_start, repeat_end):
     sub_cigar = ''
 
     for c, cigar in enumerate(cigar_tuples):
-        print(cigar[0], cigar[1], qpos, rpos) 
+        #print(cigar[0], cigar[1], qpos, rpos)
         if cigar[0] == 4:
            # soft clipped - these bases are part of the read sequence but do not
            #                affect the reference position.
@@ -148,16 +150,20 @@ def extract_reads(bed_file, bam_files, ref_fasta, aln_format):
             for bam in bams:
                 # Get the file name
                 bam_id = bam.filename.decode('utf-8').split('.')[0]
+                bam_id = bam_id.lstrip('Sample')
+                if "_" in bam_id:
+                    bam_id = bam_id.split('_')[0]
                 read_data = []
                 if chrom not in bam.references: continue
                 reads = bam.fetch(chrom, repeat_start, repeat_end)
                 check = False
                 for read in reads:
+                    spanning = False
                     if read.reference_start < repeat_start-10 and read.reference_end > repeat_end + 10:
                         start_idx, end_idx = parse_cigar(read.cigartuples, read.reference_start, repeat_start, repeat_end)
                         # RD2RP_CIGAR, RF2RD2RP_CIGAR, tags = convert_CIGAR(cigar, sub_cigar, motif, motif_len, read_repseq)
 
-                        read_data.append([f"{chrom}:{repeat_start}-{repeat_end}", read.query_name, start_idx, end_idx])
+                        spanning = True
 
                     else:
                         if read.cigartuples[0][0] == 4:
@@ -182,32 +188,47 @@ def extract_reads(bed_file, bam_files, ref_fasta, aln_format):
                             if best_position != -1:
                                 start_idx, end_idx = parse_cigar([(4, best_position), (0, 50), (1,sclip_len-best_position-50)] + read.cigartuples[1:],
                                                                 repeat_start-50, repeat_start, repeat_end)
+                                spanning = True
                                 #read_data.append([chrom, repeat_start, repeat_end, read.query_name, read.reference_start, read.reference_end, start_idx, end_idx])
+                    if spanning:
+                        # Get methylation
+                        chunk_meth = []
+                        # Get the modified bases
+                        try:
+                            print(read.query_name)
+                            #print(read.get_tags())
+                            print(read.get_tag('MM'))
 
-                    # Get methylation
-                    chunk_meth = []
-                    mods = read.modified_bases_forward
-                    for modtype in mods:
-                        if modtype[0] == 'C' and modtype[2] == 'm':
-                            for pos, qual in mods[modtype]:
-                                if pos >= start_idx and pos < end_idx: # Need to check the position logic here
-                                    prob = qual/256
-                                    if qual > 0:
-                                        chunk_meth.append(prob)
-                    # median meth
-                    if len(chunk_meth) > 0:
-                        med_meth = stats.median(chunk_meth)
-                    else:
-                        med_meth = None
-                    allele_len = (end_idx - start_idx)/motif_len
+                            mods = read.modified_bases_forward
+                            print(mods)
+                            for modtype in mods:
+                                print(modtype)
+                                if modtype[0] == 'C' and modtype[2] == 'm':
+                                    for pos, qual in mods[modtype]:
+                                        if pos >= start_idx and pos < end_idx: # Need to check the position logic here
+                                            prob = qual/256
+                                            if qual > 0:
+                                                chunk_meth.append(prob)
+                            # median methylation
+                            if len(chunk_meth) > 0:
+                                med_meth = stats.median(chunk_meth)
+                            else:
+                                med_meth = None
+                        except KeyError:
+                            # If the read does not have a methylation tag, skip it
+                            med_meth = None
 
-                    read_data.append([bam_id, f"{chrom}:{repeat_start}-{repeat_end}", read.query_name, start_idx, end_idx, allele_len, med_meth])
+                        allele_len = (end_idx - start_idx)/motif_len
+
+                        # Save read data
+                        read_data.append([bam_id, f"{chrom}:{repeat_start}-{repeat_end}", read.query_name, start_idx, end_idx, allele_len, med_meth])
 
                 read_data = sorted(read_data, key=lambda x: x[2])
                 # Print header
                 print(f"sample\tlocus\tread_name\tread_repeat_start\tread_repeat_end\tallele_length\tmedian_meth")
                 for data in read_data:
-                    print(*data, data[-1]-data[-2], sep='\t')
+                    #print(*data, data[-1]-data[-2], sep='\t')
+                    print(*data, sep='\t')
 
                 bam.close()
     fasta.close()
