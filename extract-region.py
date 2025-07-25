@@ -64,7 +64,10 @@ def extract_read_chunks(samfilename, outfilename = ''):
     #ref2readobj = Reference2Read(samfile)
     samfile = pysam.AlignmentFile(samfilename, "rc")
 
-    locus = ('chr4', 3074876, 3074940) #HD locus hardcoded for now
+    #locus = ('chr4', 3074876, 3074940) #HD locus hardcoded for now
+    # FMR1 locus chrX:147912049-147912111
+    locus = ('chrX', 147912049, 147912111) #FMR1 locus hardcoded for now
+    motiflen = 3
     for read in samfile.fetch(*locus):
         if read.is_supplementary:
             continue
@@ -84,6 +87,25 @@ def extract_read_chunks(samfilename, outfilename = ''):
 
         # extract sequence of read between those coordinates
         read_chunk = read.query_sequence[start:end]
+
+        chunk_meth = []
+        mods = read.modified_bases_forward
+        for modtype in mods:
+            if modtype[0] == 'C' and modtype[2] == 'm':
+                for pos, qual in mods[modtype]:
+                    if pos >= start and pos < end:
+                        prob = qual/256
+                        #print(pos, qual, prob)
+                        if qual > 0:
+                            chunk_meth.append(prob)
+        #print('done with read')
+        #print(chunk_meth)
+        # median meth
+        if len(chunk_meth) > 0:
+            med_meth = stats.median(chunk_meth)
+        else:
+            med_meth = None
+        print(len(read_chunk)/motiflen, med_meth)
 
         if outfilename != '':
             write_read(outfile, read_chunk, read.query_name)

@@ -6,3 +6,4 @@ dependencies:
 - pytest #only requred for testing
 - pysam
 - interlap
+- biopython
